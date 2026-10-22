@@ -6,7 +6,7 @@ MongoDB C# driver. Not intended for production.
 ## Plan
 
 0. Repository skeleton, Dockerfile, docker-compose (done).
-1. MongoDB basics in mongosh: CRUD, indexes, `explain()`, aggregation.
+1. MongoDB basics in mongosh: CRUD, indexes, `explain()`, aggregation (done).
 2. Web API on the driver: idempotent `POST /payments`, `capture` with optimistic concurrency, merchant history
    (LINQ), merchant totals (aggregation pipeline), indexes created at startup.
 3. Tests on Testcontainers: idempotent retry, concurrent capture (200 + 409), transaction rollback.

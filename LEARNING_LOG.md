@@ -118,13 +118,13 @@ Status: done. Paste the helpers `planStages` and `report` first; every query of 
 
 ## 2026-10-22. Lesson 3: idempotency (`mongosh/03-idempotency.js`)
 
-Status: to do. Paste the functions `createPayment` and `upsertPayment` as a whole before calling them.
+Status: done. Paste the functions `createPayment` and `upsertPayment` as a whole before calling them.
 
 ## 2026-10-22. Lesson 4: aggregation pipeline (`mongosh/04-aggregation.js`)
 
-Status: to do. Paste each pipeline (`db.payments.aggregate([...])`) as a whole. Run lesson 2 first: pipeline 2 uses
+Status: done. Paste each pipeline (`db.payments.aggregate([...])`) as a whole. Run lesson 2 first: pipeline 2 uses
 its index (it also works without it, only slower).
 
 ## 2026-10-22. Lesson 5: TTL, partial indexes, validation (`mongosh/05-extras.js`)
 
-Status: to do. Paste the helper `planStages` first. Check the TTL result again two minutes after Part 1.
+Status: done. Paste the helper `planStages` first. Check the TTL result again two minutes after Part 1.
