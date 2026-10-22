@@ -39,7 +39,8 @@ db = db.getSiblingDB('lab')
 db.payments.findOne()
 ```
 
-`load('/mongosh/02-indexes.js')` inside the shell runs a lesson too. Every lesson can be re-run; `00-seed.js`
+`load('/mongosh/02-indexes.js')` inside this shell runs a lesson too (not in the Compass shell: there `/mongosh` does
+not exist and `load()` is not supported). Every lesson can be re-run; `00-seed.js`
 drops and recreates the collection with all its indexes.
 
 GUI: MongoDB Compass or the MongoDB for VS Code extension, connection string

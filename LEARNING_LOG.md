@@ -100,13 +100,15 @@ Way 2 - the whole lesson at once (to see all results, or to restore the lesson s
 docker compose exec mongo mongosh /mongosh/01-crud.js
 ```
 
-Inside an open shell the same is `load('/mongosh/01-crud.js')`. Every lesson can be re-run.
+Inside a shell opened with `docker compose exec mongo mongosh` the same is `load('/mongosh/01-crud.js')`.
+This does not work in the Compass shell: Compass runs on Windows, where the path `/mongosh` does not exist, and
+its embedded shell does not support `load()`. In Compass use Way 1. Every lesson can be re-run.
 
 The data is random, so numbers differ a little from the comments. To start over, reset the database (see above).
 
 ## 2026-10-22. Lesson 1: CRUD and update operators (`mongosh/01-crud.js`)
 
-Status: to do. Run it as described in "How to run a mongosh lesson".
+Status: done. Run it as described in "How to run a mongosh lesson".
 Note: run the line `const id = UUID();` too; later commands use `id`.
 
 ## 2026-10-22. Lesson 2: indexes and explain() (`mongosh/02-indexes.js`)
