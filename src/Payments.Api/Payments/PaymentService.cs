@@ -27,14 +27,13 @@ public enum CaptureOutcome
 public sealed record CaptureResult(CaptureOutcome Outcome, Payment? Payment);
 
 /// <summary>
-/// All MongoDB access for payments. Endpoints translate the results into HTTP responses.
+/// Payment data access with the MongoDB driver. Endpoints translate the results into HTTP responses.
 /// Scoped: MongoDbContext and IPublishEndpoint (the outbox) are scoped to one HTTP request.
 /// </summary>
 public sealed class PaymentService(
     IMongoCollection<Payment> payments, MongoDbContext mongoContext, IPublishEndpoint publishEndpoint, TimeProvider clock)
+    : IPaymentService
 {
-    private static readonly PaymentStatus[] CapturableStatuses = [PaymentStatus.Pending, PaymentStatus.Authorized];
-
     /// <summary>
     /// Insert first; on duplicate key error 11000 return the stored payment. The unique index decides, not a
     /// "find, then insert" check in code, which two concurrent requests could both pass.
@@ -50,7 +49,7 @@ public sealed class PaymentService(
             Amount = request.Amount,
             Currency = request.Currency,
             Status = PaymentStatus.Pending,
-            CreatedAt = UtcNow(),
+            CreatedAt = PaymentRules.UtcNow(clock),
             Version = 0,
         };
 
@@ -62,7 +61,7 @@ public sealed class PaymentService(
         catch (MongoWriteException e) when (e.WriteError.Category == ServerErrorCategory.DuplicateKey)
         {
             var stored = await payments.Find(p => p.IdempotencyKey == idempotencyKey).FirstAsync(ct);
-            var outcome = IsSameRequest(stored, request) ? CreateOutcome.Replayed : CreateOutcome.KeyReused;
+            var outcome = PaymentRules.IsSameRequest(stored, request) ? CreateOutcome.Replayed : CreateOutcome.KeyReused;
             return new CreateResult(outcome, stored);
         }
     }
@@ -82,7 +81,7 @@ public sealed class PaymentService(
     {
         var filter = Builders<Payment>.Filter;
         var update = Builders<Payment>.Update;
-        var capturedAt = UtcNow();
+        var capturedAt = PaymentRules.UtcNow(clock);
 
         var captured = await InTransactionAsync(async session =>
         {
@@ -90,7 +89,7 @@ public sealed class PaymentService(
                 session,
                 filter.Eq(p => p.Id, id)
                     & filter.Eq(p => p.Version, expectedVersion)
-                    & filter.In(p => p.Status, CapturableStatuses),
+                    & filter.In(p => p.Status, PaymentRules.CapturableStatuses),
                 update
                     .Set(p => p.Status, PaymentStatus.Captured)
                     .Push(p => p.Attempts, new Attempt(capturedAt, provider, AttemptResult.Ok))
@@ -170,19 +169,5 @@ public sealed class PaymentService(
                 throw;
             }
         }
-    }
-
-    private static bool IsSameRequest(Payment stored, CreatePaymentRequest request) =>
-        stored.MerchantId == request.MerchantId
-        && stored.CustomerId == request.CustomerId
-        && stored.Amount == request.Amount // decimal equality: 10.5 == 10.50
-        && stored.Currency == request.Currency;
-
-    // MongoDB stores dates with millisecond precision. Truncate here, so the 201 response shows the same
-    // createdAt as every later read.
-    private DateTime UtcNow()
-    {
-        var now = clock.GetUtcNow().UtcDateTime;
-        return new DateTime(now.Ticks - now.Ticks % TimeSpan.TicksPerMillisecond, DateTimeKind.Utc);
     }
 }

@@ -103,3 +103,49 @@ GET {{baseUrl}}/merchants/{{merchant}}/payments?from=2026-01-01&to=2027-01-01&li
 
 ### 12. Captured totals per currency (aggregation pipeline)
 GET {{baseUrl}}/merchants/{{merchant}}/totals
+
+#######################################################################################################################
+# The same endpoints with the EF Core provider: prefix /ef. Same collection, same HTTP rules; differences:
+#   capture - read + SaveChanges with a concurrency token; the event is published after SaveChanges, without outbox;
+#   totals  - GroupBy is not supported: all captured payments are loaded and grouped in memory (see the api log).
+#######################################################################################################################
+
+### EF 1. Create a payment through EF Core -> 201 Created, Location: /ef/payments/{id}
+# @name efCreate
+POST {{baseUrl}}/ef/payments
+Content-Type: application/json
+Idempotency-Key: ef-order-1001
+
+{
+  "merchantId": "{{merchant}}",
+  "customerId": "c-42",
+  "amount": 10.00,
+  "currency": "EUR"
+}
+
+### EF 2. Read it through the DRIVER endpoint -> 200: both implementations share the documents
+GET {{baseUrl}}/payments/{{efCreate.response.body.$.id}}
+
+### EF 3. Capture through EF Core -> 200 OK, ETag: "1"
+POST {{baseUrl}}/ef/payments/{{efCreate.response.body.$.id}}/capture
+Content-Type: application/json
+If-Match: "0"
+
+{
+  "provider": "Klarna"
+}
+
+### EF 4. Capture again with the old version -> 412 (concurrency token)
+POST {{baseUrl}}/ef/payments/{{efCreate.response.body.$.id}}/capture
+Content-Type: application/json
+If-Match: "0"
+
+{
+  "provider": "Klarna"
+}
+
+### EF 5. Merchant history through EF Core (LINQ, same result as request 10)
+GET {{baseUrl}}/ef/merchants/{{merchant}}/payments?limit=10
+
+### EF 6. Totals through EF Core (same result as request 12, computed in memory)
+GET {{baseUrl}}/ef/merchants/{{merchant}}/totals

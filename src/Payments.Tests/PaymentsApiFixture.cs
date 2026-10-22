@@ -90,16 +90,17 @@ public sealed class PaymentsApiFixture : IAsyncLifetime
     public static CreatePaymentRequest NewRequest(string merchantId, decimal amount = 25.00m, string currency = "EUR") =>
         new(merchantId, "c-42", amount, currency);
 
-    public Task<HttpResponseMessage> CreateAsync(string idempotencyKey, CreatePaymentRequest request)
+    /// <summary>POST {prefix}/payments. prefix "" = driver endpoints, "/ef" = EF Core endpoints.</summary>
+    public Task<HttpResponseMessage> CreateAsync(string idempotencyKey, CreatePaymentRequest request, string prefix = "")
     {
-        var message = new HttpRequestMessage(HttpMethod.Post, "/payments") { Content = JsonContent.Create(request) };
+        var message = new HttpRequestMessage(HttpMethod.Post, $"{prefix}/payments") { Content = JsonContent.Create(request) };
         message.Headers.Add("Idempotency-Key", idempotencyKey);
         return Client.SendAsync(message);
     }
 
-    public Task<HttpResponseMessage> CaptureAsync(Guid id, string? ifMatch, string provider = "Adyen")
+    public Task<HttpResponseMessage> CaptureAsync(Guid id, string? ifMatch, string provider = "Adyen", string prefix = "")
     {
-        var message = new HttpRequestMessage(HttpMethod.Post, $"/payments/{id}/capture")
+        var message = new HttpRequestMessage(HttpMethod.Post, $"{prefix}/payments/{id}/capture")
         {
             Content = JsonContent.Create(new CapturePaymentRequest(provider)),
         };

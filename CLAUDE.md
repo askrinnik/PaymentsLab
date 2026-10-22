@@ -12,8 +12,10 @@ MongoDB C# driver. Not intended for production.
 3. Tests on Testcontainers (`src/Payments.Tests`): idempotent retry, concurrent create and capture, merchant queries (done).
 4. Transaction and outbox: capture updates the payment and publishes `PaymentCaptured` through the MassTransit
    MongoDB bus outbox in one transaction; the event reaches RabbitMQ and `PaymentCapturedConsumer`.
-   Tests: one event per capture, one event for 10 concurrent captures, an aborted transaction leaves nothing.
-5. Optional: second repository on the EF Core provider, compare with the driver.
+   Tests: one event per capture, one event for 10 concurrent captures, an aborted transaction leaves nothing (done).
+5. EF Core provider side by side: `IPaymentService` with `PaymentService` (driver) and `EfPaymentService`
+   (`MongoDB.EntityFrameworkCore`, `EfCore/`); the same endpoints are mapped twice, under "" and "/ef".
+   Tests compare both on the same collection, including the raw BSON shape (done).
 6. Optional: change stream `BackgroundService` with a stored resume token.
 
 If the code needs to deviate from the plan, say so and explain why instead of silently changing the approach.
@@ -36,6 +38,8 @@ Explain MongoDB-specific choices by comparing them with SQL Server / EF Core whe
   mounted into the `mongo` container as `/mongosh`. Lessons must stay re-runnable.
 - Everything related to the .NET build and Docker lives in `src/`: `PaymentsLab.slnx`, `global.json`,
   `Directory.Build.props`, `Dockerfile`, `.dockerignore`, `docker-compose.yml` and the projects.
+- `Payments.Api` folders: `Domain/`, `Mongo/` (driver setup), `Payments/` (driver data access, shared endpoints),
+  `EfCore/` (EF Core data access), `Messaging/` (MassTransit).
 - Test projects live in `src/` next to the projects they test (for example `src/Payments.Tests`); there is no
   separate `tests/` folder.
 - `Directory.Build.props` holds shared settings (net10.0, nullable, warnings as errors); keep `.csproj` files minimal.
@@ -77,6 +81,8 @@ compose the host is `mongo`. `directConnection=true` is required because the rep
   `version`, the update does `$inc`. Version mismatch -> 412, missing `If-Match` -> 428, wrong status -> 409.
 - Indexes are created in code at startup (`Indexes.CreateManyAsync`); compound indexes follow the ESR rule.
 - Write concern stays `majority` (the default); do not lower it.
+- `PaymentsDbContext` must map exactly the same document shape as the driver conventions (element names, enums as
+  strings, Decimal128). `EfCoreTests.Ef_and_driver_write_documents_of_the_same_shape` guards this.
 
 ## Working rules
 

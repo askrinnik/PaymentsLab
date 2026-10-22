@@ -52,3 +52,19 @@ MassTransit 8.5 MongoDB bus outbox). A background service delivers committed mes
 ```bash
 docker compose logs api | grep "PaymentCaptured received"
 ```
+
+## Driver and EF Core provider side by side
+
+Every endpoint also exists with the prefix `/ef` (`/ef/payments`, `/ef/merchants/...`). The HTTP rules are shared;
+the data access is `PaymentService` (MongoDB driver) or `EfPaymentService` (MongoDB EF Core provider). Both work on
+the same collection and read each other's documents.
+
+| Operation | Driver | EF Core provider |
+|---|---|---|
+| Create, read, history | insert, find, LINQ | `Add` + `SaveChanges`, LINQ |
+| Duplicate key | `MongoWriteException` | `MongoBulkWriteException` from `SaveChanges` (also logged by EF Core as an error) |
+| Capture | one atomic `FindOneAndUpdate` (`$set`, `$push`, `$inc`, version in the filter) | read, change, `SaveChanges` with `version` as concurrency token |
+| Capture event | same transaction as the update (MongoDB outbox) | published after `SaveChanges`: lost if the process stops in between |
+| Totals | `$group` on the server | `GroupBy` not supported: all captured payments loaded and grouped in memory |
+| Mapping | global BSON conventions | repeated by hand in `PaymentsDbContext` |
+| Indexes, transactions with outbox | yes | no (indexes are created by the driver at startup) |

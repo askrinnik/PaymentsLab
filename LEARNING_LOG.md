@@ -233,7 +233,7 @@ dotnet test ─► Testcontainers starts MongoDB 8.0 (single-node replica set) i
 
 ## 2026-10-22. Step 4: transaction and transactional outbox
 
-Status: to do.
+Status: done.
 
 What was built:
 
@@ -278,6 +278,60 @@ Notes:
 5. Compass, database `payments`: the collections `outbox.messages` (empty: delivered messages are removed),
    `outbox.states` and `inbox.states` were created by MassTransit.
 6. From `src/`, run the tests (19 tests, about 15 seconds):
+
+   ```powershell
+   dotnet test
+   ```
+
+## 2026-10-22. Step 5: the EF Core provider side by side with the driver
+
+Status: done.
+
+What was built:
+
+```text
+/payments/...      ─┐                               ┌─► PaymentService     (MongoDB driver)
+                    ├─► the same handlers ─► IPaymentService
+/ef/payments/...   ─┘   (PaymentEndpoints)          └─► EfPaymentService   (MongoDB EF Core provider)
+                                                              │
+                                     both use the same collection payments
+```
+
+| File | What it shows |
+|---|---|
+| `Payments/IPaymentService.cs` | The common interface of both implementations |
+| `Payments/PaymentEndpoints.cs` | `MapPaymentEndpoints<TService>(prefix)`: one set of HTTP rules, mapped twice in `Program.cs` |
+| `EfCore/PaymentsDbContext.cs` | `UseMongoDB`; the document shape repeated by hand (element names, enums, Decimal128, owned `attempts`, `version` as concurrency token) |
+| `EfCore/EfPaymentService.cs` | The same operations with `DbContext`; each workaround is explained in a comment |
+| `Payments.Tests/EfCoreTests.cs` | Same behaviour, the same raw BSON shape, each side reads the other's documents, differences |
+
+Differences found while building it (also in `README.md`):
+
+- Capture: one atomic `FindOneAndUpdate` (driver) against read + `SaveChanges` with a concurrency token (EF Core).
+  Without `IsConcurrencyToken()` the parallel-capture test fails (checked by hand).
+- Event: the driver publishes it in the same transaction (outbox); EF Core publishes after `SaveChanges`, so a crash
+  in between loses the event.
+- Totals: EF Core cannot translate `GroupBy`; it loads all captured payments and groups in memory.
+- Duplicate key: `SaveChanges` throws the driver's `MongoBulkWriteException` (not `DbUpdateException` as with
+  SQL Server), and EF Core logs it as `fail: Microsoft.EntityFrameworkCore.Update` even though the code handles it.
+- `Payments.Api.csproj` suppresses `AD0001`: the ASP.NET Core route handler analyzer crashes on the generic
+  handlers. It is an analyzer bug, the code is valid.
+
+1. From `src/`, rebuild and start the stack:
+
+   ```powershell
+   docker compose up -d --build --wait
+   ```
+
+2. In `payments.http`, run the section "The same endpoints with the EF Core provider" (requests EF 1 - EF 6).
+   EF 2 reads the EF payment through the driver endpoint. Compare EF 5 and EF 6 with requests 10 and 12.
+3. See the in-memory grouping in the log:
+
+   ```powershell
+   docker compose logs api | Select-String "EF Core totals"
+   ```
+
+4. From `src/`, run the tests (26 tests):
 
    ```powershell
    dotnet test
