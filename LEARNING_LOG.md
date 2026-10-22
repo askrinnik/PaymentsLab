@@ -39,7 +39,7 @@ there with `use lab`.
 
 ## 2026-10-22. Reset the lesson database `lab`
 
-Status: to do.
+Status: done.
 
 The database `lab` contains results of earlier test runs of all lessons: extra collections (`merchants`,
 `payments_validated`, `threeDsSessions`), indexes and demo documents. Start the lessons from a clean state.
@@ -64,3 +64,65 @@ The database `lab` contains results of earlier test runs of all lessons: extra c
    **Indexes** tab shows one index, `_id_`.
 
 The same reset works at any time later, for example before repeating the lessons.
+
+## 2026-10-22. How to run a mongosh lesson
+
+This applies to every lesson in `mongosh/` (`01-crud.js` ... `05-extras.js`). Run the commands from `src/`.
+MongoDB must be running (`docker compose up -d --wait mongo`) and `00-seed.js` must have been run once.
+
+Way 1 - step by step (recommended for learning):
+
+1. Open the shell: the **>_MONGOSH** panel in Compass, or
+
+   ```powershell
+   docker compose exec mongo mongosh
+   ```
+
+2. Select the lesson database:
+
+   ```javascript
+   use lab
+   ```
+
+3. Open the lesson file in an editor. The header lists the parts of the lesson and why they matter.
+4. If the lesson has helper functions (lessons 2 and 5: `planStages`, `report`), paste them into the shell once.
+5. Paste the commands one by one. Read the comment above each command first, and compare the result with the
+   `Check:` / `Result:` comment below it. Paste a multi-line command or function as a whole.
+6. Skip the `show(...)` wrapper: run the expression inside it, the shell prints the result itself. Example: instead
+   of `show('findOne by _id', db.payments.findOne({ _id: id }))` run `db.payments.findOne({ _id: id })`.
+7. A `const` cannot be declared twice in one shell. To repeat a lesson, open a new shell or drop the `const`
+   (`id = UUID()` instead of `const id = UUID()`).
+8. Do the exercises at the end of the file.
+
+Way 2 - the whole lesson at once (to see all results, or to restore the lesson state):
+
+```powershell
+docker compose exec mongo mongosh /mongosh/01-crud.js
+```
+
+Inside an open shell the same is `load('/mongosh/01-crud.js')`. Every lesson can be re-run.
+
+The data is random, so numbers differ a little from the comments. To start over, reset the database (see above).
+
+## 2026-10-22. Lesson 1: CRUD and update operators (`mongosh/01-crud.js`)
+
+Status: to do. Run it as described in "How to run a mongosh lesson".
+Note: run the line `const id = UUID();` too; later commands use `id`.
+
+## 2026-10-22. Lesson 2: indexes and explain() (`mongosh/02-indexes.js`)
+
+Status: to do. Paste the helpers `planStages` and `report` first; every query of the lesson is printed through
+`report(...)`, so here keep the `report(...)` call instead of skipping it.
+
+## 2026-10-22. Lesson 3: idempotency (`mongosh/03-idempotency.js`)
+
+Status: to do. Paste the functions `createPayment` and `upsertPayment` as a whole before calling them.
+
+## 2026-10-22. Lesson 4: aggregation pipeline (`mongosh/04-aggregation.js`)
+
+Status: to do. Paste each pipeline (`db.payments.aggregate([...])`) as a whole. Run lesson 2 first: pipeline 2 uses
+its index (it also works without it, only slower).
+
+## 2026-10-22. Lesson 5: TTL, partial indexes, validation (`mongosh/05-extras.js`)
+
+Status: to do. Paste the helper `planStages` first. Check the TTL result again two minutes after Part 1.
