@@ -7,7 +7,9 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using MongoDB.Driver;
+using Payments.Api.ChangeStreams;
 using Payments.Api.Domain;
 using Payments.Api.Messaging;
 using Payments.Api.Payments;
@@ -58,6 +60,9 @@ public sealed class PaymentsApiFixture : IAsyncLifetime
         // Creating the client starts the API; its hosted service creates the indexes.
         Client = _factory.CreateClient();
         Payments = _factory.Services.GetRequiredService<IMongoCollection<Payment>>();
+
+        // The change stream of the API opens in the background; wait for it, so no test write happens before it.
+        await _factory.Services.GetServices<IHostedService>().OfType<PaymentStatusWatcher>().Single().Watching;
     }
 
     public async Task DisposeAsync()

@@ -16,7 +16,9 @@ MongoDB C# driver. Not intended for production.
 5. EF Core provider side by side: `IPaymentService` with `PaymentService` (driver) and `EfPaymentService`
    (`MongoDB.EntityFrameworkCore`, `EfCore/`); the same endpoints are mapped twice, under "" and "/ef".
    Tests compare both on the same collection, including the raw BSON shape (done).
-6. Optional: change stream `BackgroundService` with a stored resume token.
+6. Change stream: `ChangeStreams/PaymentStatusWatcher` (`BackgroundService`) follows `payments`, logs every status
+   change, writes the `paymentStatusHistory` projection (idempotent) and stores the resume token in
+   `changeStreamCheckpoints`. Tests: both implementations are seen, a restarted watcher resumes, a new one starts now (done).
 
 If the code needs to deviate from the plan, say so and explain why instead of silently changing the approach.
 
@@ -39,7 +41,7 @@ Explain MongoDB-specific choices by comparing them with SQL Server / EF Core whe
 - Everything related to the .NET build and Docker lives in `src/`: `PaymentsLab.slnx`, `global.json`,
   `Directory.Build.props`, `Dockerfile`, `.dockerignore`, `docker-compose.yml` and the projects.
 - `Payments.Api` folders: `Domain/`, `Mongo/` (driver setup), `Payments/` (driver data access, shared endpoints),
-  `EfCore/` (EF Core data access), `Messaging/` (MassTransit).
+  `EfCore/` (EF Core data access), `Messaging/` (MassTransit), `ChangeStreams/` (change stream watcher).
 - Test projects live in `src/` next to the projects they test (for example `src/Payments.Tests`); there is no
   separate `tests/` folder.
 - `Directory.Build.props` holds shared settings (net10.0, nullable, warnings as errors); keep `.csproj` files minimal.

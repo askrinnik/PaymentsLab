@@ -68,3 +68,14 @@ the same collection and read each other's documents.
 | Totals | `$group` on the server | `GroupBy` not supported: all captured payments loaded and grouped in memory |
 | Mapping | global BSON conventions | repeated by hand in `PaymentsDbContext` |
 | Indexes, transactions with outbox | yes | no (indexes are created by the driver at startup) |
+
+## Change stream
+
+`PaymentStatusWatcher` follows the change stream of `payments` (MongoDB change data capture, needs the replica set).
+It sees every insert and every status update, from any writer (driver, EF Core, mongosh), logs it, writes the
+`paymentStatusHistory` collection and stores its resume token in `changeStreamCheckpoints`, so after a restart it
+continues where it stopped.
+
+```bash
+docker compose logs api | grep "Change stream: payment"
+```

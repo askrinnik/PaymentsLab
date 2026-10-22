@@ -336,3 +336,64 @@ Differences found while building it (also in `README.md`):
    ```powershell
    dotnet test
    ```
+
+## 2026-10-22. Step 6: change stream with a resume token
+
+Status: done.
+
+What was built:
+
+```text
+payments ──write──► oplog ──change stream──► PaymentStatusWatcher ─┬─► log line
+                                                                   ├─► paymentStatusHistory (projection)
+                                                                   └─► changeStreamCheckpoints (resume token)
+```
+
+| File | What it shows |
+|---|---|
+| `ChangeStreams/PaymentStatusWatcher.cs` | `WatchAsync` with a server-side `$match` (inserts and updates of `status`), `ResumeAfter`, reopening after errors, history-lost handling (error 286) |
+| `ChangeStreams/PaymentStatusChange.cs` | The projection document; `_id` = watcher + payment + version, so a replayed event is written once |
+| `Payments.Tests/ChangeStreamTests.cs` | the watcher sees driver and EF Core writes; a restarted watcher catches up; a new watcher starts "from now" |
+
+Notes:
+
+- The plan said "log the status changes". The watcher also writes the `paymentStatusHistory` collection: the tests
+  check it, and it shows the usual use of a change stream (a projection / audit trail) and why it must be idempotent
+  (an event can arrive twice after a crash).
+- Without `ResumeAfter` the restart test fails (checked by hand).
+- Change stream vs outbox (step 4): the outbox sends the events the code decided to publish, in the same
+  transaction; a change stream reports every change in the data, from any writer, with no code in the writers.
+
+1. From `src/`, rebuild and start the stack:
+
+   ```powershell
+   docker compose up -d --build --wait
+   ```
+
+2. Create and capture a payment with `payments.http` (requests 1 and 6, new `Idempotency-Key`), then see the events:
+
+   ```powershell
+   docker compose logs api | Select-String "Change stream: payment"
+   ```
+
+3. A change from outside the API is seen too. Copy the payment id and change it in mongosh (Compass shell or
+   `docker compose exec mongo mongosh payments`):
+
+   ```javascript
+   db.payments.updateOne({ _id: UUID('<payment id>') }, { $set: { status: 'Refunded' }, $inc: { version: 1 } })
+   ```
+
+4. Resume after a restart: stop the API, change a payment in mongosh as in item 3, start the API again:
+
+   ```powershell
+   docker compose stop api
+   docker compose start api
+   ```
+
+   The log shows `Watching payments for status changes (resumed)` and then the change made while the API was down.
+5. In Compass, database `payments`: collections `paymentStatusHistory` and `changeStreamCheckpoints`.
+6. From `src/`, run the tests (30 tests):
+
+   ```powershell
+   dotnet test
+   ```

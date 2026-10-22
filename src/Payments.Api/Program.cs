@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using Payments.Api.ChangeStreams;
 using Payments.Api.EfCore;
 using Payments.Api.Messaging;
 using Payments.Api.Mongo;
@@ -14,6 +15,7 @@ builder.Services.AddMessaging();
 builder.Services.AddScoped<PaymentService>();
 builder.Services.AddPaymentsDbContext(); // EF Core provider: the alternative data access under /ef
 builder.Services.AddScoped<EfPaymentService>();
+builder.Services.AddPaymentStatusWatcher(); // change stream: records status changes of all payments
 builder.Services.AddProblemDetails();
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter())); // "Captured" instead of 2 in JSON
