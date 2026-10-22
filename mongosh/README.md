@@ -1,7 +1,9 @@
 # mongosh lessons
 
 Hands-on lessons for the MongoDB shell. They use the database `lab`, so they do not touch the `payments`
-database of the API.
+database of the API. This is Step 1 of the course: see
+[LEARNING_STEPS.md](../LEARNING_STEPS.md#step-1-mongodb-basics-in-mongosh) for the full instructions (seed, reset,
+how to run a lesson step by step, notes per lesson, pitfalls).
 
 | File | Topic |
 |---|---|
