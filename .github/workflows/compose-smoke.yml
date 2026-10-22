@@ -1,0 +1,41 @@
+name: Compose smoke test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: src
+    steps:
+      - uses: actions/checkout@v7
+
+      # Waits for the mongo and rabbitmq healthchecks; api has no healthcheck, so it is only "running".
+      - name: Start the stack
+        run: docker compose up -d --build --wait
+
+      # The API may still be starting, so retry until /health answers.
+      - name: Check /health
+        run: curl --fail --silent --show-error --retry 20 --retry-delay 3 --retry-all-errors http://localhost:8080/health
+
+      - name: Show logs
+        if: ${{ failure() }}
+        run: docker compose logs --no-color
+
+      - name: Stop the stack
+        if: ${{ always() }}
+        run: docker compose down -v
