@@ -6,7 +6,7 @@ using Payments.Api.Payments;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddMongo(builder.Configuration);
+builder.Services.AddMongo();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<PaymentService>();
 builder.Services.AddProblemDetails();
@@ -23,3 +23,6 @@ app.MapGet("/health", async (IMongoDatabase database, CancellationToken ct) =>
 app.MapPaymentEndpoints();
 
 app.Run();
+
+// Makes the entry point visible to WebApplicationFactory<Program> in Payments.Tests.
+public partial class Program;

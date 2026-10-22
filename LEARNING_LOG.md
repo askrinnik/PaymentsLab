@@ -196,3 +196,37 @@ Both ways use the same database `payments`. The container gets code changes only
    **Indexes** tab (`ux_idempotencyKey`, `ix_merchantId_createdAt`).
 4. To run the requests again, change the `Idempotency-Key` in request 1 (for example `order-1002`), otherwise
    request 1 returns 200 with the old, already captured payment.
+
+## 2026-10-22. Step 3: automated tests on a real MongoDB
+
+Status: to do.
+
+What was built (`src/Payments.Tests`, xUnit):
+
+```text
+dotnet test ─► Testcontainers starts MongoDB 8.0 (single-node replica set) in Docker
+            ─► WebApplicationFactory starts the API in memory, connected to that MongoDB
+            ─► the tests send HTTP requests and check the responses and the stored documents
+```
+
+| File | What it checks |
+|---|---|
+| `PaymentsApiFixture.cs` | One MongoDB container and one API for the whole run; helpers for requests |
+| `IdempotencyTests.cs` | retry -> 200 with the same payment; other body -> 422; no key -> 400; 10 parallel requests with one key -> one 201, one document |
+| `CaptureTests.cs` | capture -> 200 and ETag "1"; 10 parallel captures -> one 200, nine 412; stale ETag on a Pending payment -> 412; 409, 428, 404 |
+| `MerchantTests.cs` | history order, limit and date range; other merchants excluded; totals 0.10 + 0.20 = exactly 0.30 |
+
+1. Start Docker Desktop. The docker-compose stack is not needed: the tests start their own MongoDB.
+2. From `src/`, run all tests:
+
+   ```powershell
+   dotnet test
+   ```
+
+   Expected: `Passed! - Failed: 0, Passed: 16`. The first run downloads the `mongo:8.0` image if it is missing.
+   Testcontainers removes its container after the run.
+3. To run one test class: `dotnet test --filter "FullyQualifiedName~CaptureTests"`.
+4. Visual Studio: **Test > Test Explorer**, then **Run All**.
+5. Read the comments above the tests. Note `Capture_with_a_stale_etag_is_rejected_even_if_the_status_allows_it`:
+   the parallel-capture test alone would pass even without the version check, because the status filter also stops
+   a second capture. Only this test fails when the version is removed from the update filter (checked by hand).

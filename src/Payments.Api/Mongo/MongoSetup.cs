@@ -41,15 +41,18 @@ public static class MongoSetup
         }
     }
 
-    public static IServiceCollection AddMongo(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddMongo(this IServiceCollection services)
     {
         RegisterConventions();
 
-        var connectionString = configuration.GetConnectionString("Mongo")
-            ?? throw new InvalidOperationException("Connection string 'Mongo' is not configured.");
-
         // MongoClient is thread-safe and holds the connection pool: one instance per application.
-        services.AddSingleton<IMongoClient>(_ => new MongoClient(connectionString));
+        // The connection string is read when the client is first needed, so tests can replace it.
+        services.AddSingleton<IMongoClient>(sp =>
+        {
+            var connectionString = sp.GetRequiredService<IConfiguration>().GetConnectionString("Mongo")
+                ?? throw new InvalidOperationException("Connection string 'Mongo' is not configured.");
+            return new MongoClient(connectionString);
+        });
         services.AddSingleton(sp => sp.GetRequiredService<IMongoClient>().GetDatabase(DatabaseName));
         services.AddSingleton(sp => sp.GetRequiredService<IMongoDatabase>().GetCollection<Payment>(PaymentsCollection));
         services.AddHostedService<MongoIndexInitializer>();

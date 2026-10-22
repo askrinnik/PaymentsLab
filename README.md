@@ -32,3 +32,13 @@ MongoDB runs as a single-node replica set, because transactions and change strea
 | `GET /merchants/{merchantId}/totals` | Captured amount per currency |
 
 Ready-made requests: `src/Payments.Api/payments.http`.
+
+## Tests
+
+```bash
+cd src
+dotnet test
+```
+
+The tests start their own MongoDB replica set in Docker (Testcontainers) and run the API in memory, so only Docker
+must be running. They do not touch the database of docker-compose.

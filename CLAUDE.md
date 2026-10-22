@@ -9,8 +9,9 @@ MongoDB C# driver. Not intended for production.
 1. MongoDB basics in mongosh: CRUD, indexes, `explain()`, aggregation (done).
 2. Web API on the driver: idempotent `POST /payments`, `capture` with optimistic concurrency, merchant history
    (LINQ), merchant totals (aggregation pipeline), indexes created at startup. Manual requests: `payments.http` (done).
-3. Tests on Testcontainers: idempotent retry, concurrent capture (200 + 412), transaction rollback.
+3. Tests on Testcontainers (`src/Payments.Tests`): idempotent retry, concurrent create and capture, merchant queries.
 4. Transaction and outbox: `WithTransactionAsync`, then MassTransit MongoDB outbox with a `PaymentCaptured` event.
+   Test: a rolled-back transaction leaves no event in the outbox.
 5. Optional: second repository on the EF Core provider, compare with the driver.
 6. Optional: change stream `BackgroundService` with a stored resume token.
 
@@ -42,6 +43,7 @@ Run all commands from `src/`:
 
 ```powershell
 dotnet build
+dotnet test                                  # needs Docker: Testcontainers starts its own MongoDB
 docker compose up -d --build --wait          # whole stack; API on http://localhost:8080
 docker compose up -d --wait mongo rabbitmq   # infrastructure only, run the API with dotnet run
 docker compose exec mongo mongosh            # interactive shell
