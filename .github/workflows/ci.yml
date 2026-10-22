@@ -16,7 +16,10 @@ concurrency:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    # MongoDB 8.0 does not start on Linux kernels 6.19 - 7.0.13 (SERVER-121912). Newer ubuntu-24.04 runner images
+    # have such a kernel, so the jobs run on ubuntu-22.04. Go back to ubuntu-latest once the runner kernel is
+    # 7.0.14 or newer; the "Show kernel" step prints it.
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
     defaults:
       run:
@@ -26,6 +29,9 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: true
     steps:
       - uses: actions/checkout@v7
+
+      - name: Show kernel
+        run: uname -r
 
       - uses: actions/setup-dotnet@v6
         with:

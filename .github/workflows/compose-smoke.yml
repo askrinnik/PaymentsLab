@@ -16,13 +16,19 @@ concurrency:
 
 jobs:
   smoke:
-    runs-on: ubuntu-latest
+    # MongoDB 8.0 does not start on Linux kernels 6.19 - 7.0.13 (SERVER-121912). Newer ubuntu-24.04 runner images
+    # have such a kernel, so the jobs run on ubuntu-22.04. Go back to ubuntu-latest once the runner kernel is
+    # 7.0.14 or newer; the "Show kernel" step prints it.
+    runs-on: ubuntu-22.04
     timeout-minutes: 20
     defaults:
       run:
         working-directory: src
     steps:
       - uses: actions/checkout@v7
+
+      - name: Show kernel
+        run: uname -r
 
       # Waits for the mongo and rabbitmq healthchecks; api has no healthcheck, so it is only "running".
       - name: Start the stack
