@@ -70,7 +70,9 @@ compose the host is `mongo`. `directConnection=true` is required because the rep
 
 ## Working rules
 
-- Work step by step following the guide; do one step per task and stop for review.
+- Work step by step following the plan; do one step per task and stop for review.
+- Keep `LEARNING_LOG.md` in the repository root up to date: record the instructions given to the learner and the
+  steps the learner reports as done, with the exact commands, so the whole path can be repeated later.
 - Keep code small and readable; this is a learning project, so prefer clarity over abstractions.
 - Code, comments, commit messages and repository files are in English.
 - Never commit unless explicitly asked.
