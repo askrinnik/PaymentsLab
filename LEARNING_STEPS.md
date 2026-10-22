@@ -754,9 +754,10 @@ payments ──write──► oplog ──change stream──► PaymentStatusWa
 - **Change stream = change data capture.** The server reads its replication log (the oplog) and sends every
   matching change to the client. SQL Server has CDC or Change Tracking for this; in MongoDB it needs a replica set.
   The `$match` runs on the server, so only inserts and status updates reach the application.
-- **Resume token.** Every event has a token. The watcher stores it after each event; on restart it opens the stream
-  with `ResumeAfter` and gets everything after that event. If the oplog no longer contains it (error 286), the
-  watcher starts from now; a real system would rebuild the projection.
+- **Resume token.** Every event has a token, and the cursor has one too (`cursor.GetResumeToken()`). The watcher
+  stores a token right after the stream opens, after each event and after each batch (even an empty one); on
+  restart it opens the stream with `ResumeAfter` and gets everything after that point. If the oplog no longer
+  contains it (error 286), the watcher starts from now; a real system would rebuild the projection.
 - **Idempotent projection.** An event can be processed twice (a crash after the projection write, before the token
   write). The projection `_id` is built from watcher, payment and version, and the write is an upsert, so a replay
   changes nothing.
@@ -768,6 +769,10 @@ payments ──write──► oplog ──change stream──► PaymentStatusWa
 
 - Change streams need a replica set; on a standalone `mongod` `Watch` fails.
 - Without `ResumeAfter` the restart test fails: changes made while the watcher was stopped are lost.
+- Do not pass the service's stopping token to the checkpoint write. An earlier version did: a stop that came between
+  the projection write and the token write cancelled the token write, the watcher had no checkpoint at all, and the
+  restart began "from now" and lost the changes made meanwhile. The restart test failed about once in five runs.
+  The fix: the token write is not cancellable, and a token is also saved as soon as the stream opens.
 - An update that does not touch `status` produces no event: the `$match` filters it on the server.
 - The oplog has a limited size. A watcher stopped for a long time cannot resume and must start again.
 

@@ -65,6 +65,10 @@ public sealed class ChangeStreamTests(PaymentsApiFixture api)
         await SeenAsync(name, a.Id, "Pending:0");
         await first.StopAsync(CancellationToken.None);
 
+        // Whenever the stop happened, the watcher left a checkpoint to resume from.
+        var checkpoints = Database.GetCollection<MongoDB.Bson.BsonDocument>(PaymentStatusWatcher.CheckpointCollection);
+        Assert.Equal(1, await checkpoints.CountDocumentsAsync(new MongoDB.Bson.BsonDocument("_id", name)));
+
         // The watcher is stopped now.
         await api.CaptureAsync(a.Id, "\"0\"");
         var b = await CreateAsync();
