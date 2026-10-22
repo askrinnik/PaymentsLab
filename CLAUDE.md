@@ -28,9 +28,15 @@ Explain MongoDB-specific choices by comparing them with SQL Server / EF Core whe
 
 ## Layout and commands
 
-- `PaymentsLab.slnx` — solution; `src/` for production code, `tests/` for test projects.
+- The repository root holds only general files: `README.md`, `CLAUDE.md`, git and editor settings.
+- Everything related to the .NET build and Docker lives in `src/`: `PaymentsLab.slnx`, `global.json`,
+  `Directory.Build.props`, `Dockerfile`, `.dockerignore`, `docker-compose.yml` and the projects.
+- Test projects live in `src/` next to the projects they test (for example `src/Payments.Tests`); there is no
+  separate `tests/` folder.
 - `Directory.Build.props` holds shared settings (net10.0, nullable, warnings as errors); keep `.csproj` files minimal.
 - `docker-compose.yml` runs `mongo` (replica set `rs0`, initiated by its healthcheck), `rabbitmq` and `api`.
+
+Run all commands from `src/`:
 
 ```powershell
 dotnet build

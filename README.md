@@ -5,9 +5,10 @@ idempotency keys, optimistic concurrency, aggregations, transactions and a trans
 
 ## Run
 
-Requirements: .NET 10 SDK and Docker.
+Requirements: .NET 10 SDK and Docker. The solution and Docker files are in `src/`.
 
 ```bash
+cd src
 docker compose up -d --build --wait
 curl http://localhost:8080/health
 ```
