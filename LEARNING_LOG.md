@@ -90,9 +90,7 @@ Way 1 - step by step (recommended for learning):
    `Check:` / `Result:` comment below it. Paste a multi-line command or function as a whole.
 6. Skip the `show(...)` wrapper: run the expression inside it, the shell prints the result itself. Example: instead
    of `show('findOne by _id', db.payments.findOne({ _id: id }))` run `db.payments.findOne({ _id: id })`.
-7. A `const` cannot be declared twice in one shell. To repeat a lesson, open a new shell or drop the `const`
-   (`id = UUID()` instead of `const id = UUID()`).
-8. Do the exercises at the end of the file.
+7. Do the exercises at the end of the file.
 
 Way 2 - the whole lesson at once (to see all results, or to restore the lesson state):
 
@@ -100,7 +98,9 @@ Way 2 - the whole lesson at once (to see all results, or to restore the lesson s
 docker compose exec mongo mongosh /mongosh/01-crud.js
 ```
 
-Inside a shell opened with `docker compose exec mongo mongosh` the same is `load('/mongosh/01-crud.js')`.
+Inside a shell opened with `docker compose exec mongo mongosh` the same is `load('/mongosh/01-crud.js')`. Lessons can be
+loaded one after another, or again, in the same shell; no restart is needed. After `load()` the prompt shows `lab`:
+the script switches the shell to the lesson database.
 This does not work in the Compass shell: Compass runs on Windows, where the path `/mongosh` does not exist, and
 its embedded shell does not support `load()`. In Compass use Way 1. Every lesson can be re-run.
 
@@ -113,7 +113,7 @@ Note: run the line `const id = UUID();` too; later commands use `id`.
 
 ## 2026-10-22. Lesson 2: indexes and explain() (`mongosh/02-indexes.js`)
 
-Status: to do. Paste the helpers `planStages` and `report` first; every query of the lesson is printed through
+Status: done. Paste the helpers `planStages` and `report` first; every query of the lesson is printed through
 `report(...)`, so here keep the `report(...)` call instead of skipping it.
 
 ## 2026-10-22. Lesson 3: idempotency (`mongosh/03-idempotency.js`)
