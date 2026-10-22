@@ -50,7 +50,8 @@ docker compose down                          # stop; add -v to drop the mongo-da
 
 Connection string from the host: `mongodb://localhost:27017/?replicaSet=rs0&directConnection=true`; inside
 compose the host is `mongo`. `directConnection=true` is required because the replica set member is registered as
-`localhost:27017`. Database `payments`. RabbitMQ UI: http://localhost:15672 (guest/guest).
+`localhost:27017`. GUI tools (Compass, VS Code extension) do not accept `replicaSet` together with
+`directConnection`; give them `mongodb://localhost:27017/?directConnection=true`. Database `payments`. RabbitMQ UI: http://localhost:15672 (guest/guest).
 
 ## MongoDB conventions (mandatory)
 

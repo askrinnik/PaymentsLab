@@ -43,7 +43,8 @@ db.payments.findOne()
 drops and recreates the collection with all its indexes.
 
 GUI: MongoDB Compass or the MongoDB for VS Code extension, connection string
-`mongodb://localhost:27017/?replicaSet=rs0&directConnection=true`.
+`mongodb://localhost:27017/?directConnection=true`. Compass rejects `replicaSet` together with
+`directConnection`; without `replicaSet` it still connects to the replica set primary.
 
 ## Self-check questions
 
