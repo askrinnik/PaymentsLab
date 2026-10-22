@@ -128,3 +128,71 @@ its index (it also works without it, only slower).
 ## 2026-10-22. Lesson 5: TTL, partial indexes, validation (`mongosh/05-extras.js`)
 
 Status: done. Paste the helper `planStages` first. Check the TTL result again two minutes after Part 1.
+
+## 2026-10-22. Step 2: Web API on the MongoDB driver
+
+Status: done.
+
+What was built (`src/Payments.Api`):
+
+| File | What it shows |
+|---|---|
+| `Mongo/MongoSetup.cs` | Global BSON mapping (Guid, Decimal128, camelCase, enums as strings), `MongoClient` as a singleton |
+| `Mongo/MongoIndexInitializer.cs` | Indexes created at startup: unique `idempotencyKey`, `{ merchantId: 1, createdAt: -1 }` |
+| `Domain/Payment.cs` | The payment document with the embedded `attempts` array |
+| `Payments/PaymentService.cs` | All MongoDB calls: insert + error 11000, `FindOneAndUpdate` with version, LINQ, aggregation |
+| `Payments/PaymentEndpoints.cs` | HTTP: status codes, `Idempotency-Key`, `ETag` / `If-Match` |
+| `payments.http` | Ready-made requests for every case |
+
+### How to start the API
+
+Visual Studio is not required. There are two ways; both can run at the same time.
+
+```text
+docker compose up ─► container api (port 8080) ─► container mongo
+                     ▲
+payments.http ───────┘  @baseUrl = http://localhost:8080
+```
+
+Way 1 - in Docker (`payments.http` is set up for this way):
+
+1. From `src/`, build the API from the current code and start it with MongoDB and RabbitMQ. If the stack is
+   already running, the command is safe to repeat:
+
+   ```powershell
+   docker compose up -d --build --wait
+   ```
+
+2. Open http://localhost:8080/health in a browser. Expected: `{"status":"ok","mongo":"ok"}`.
+
+Way 2 - from Visual Studio (to use breakpoints and the debugger):
+
+1. From `src/`, start only the infrastructure:
+
+   ```powershell
+   docker compose up -d --wait mongo rabbitmq
+   ```
+
+2. Open `src/PaymentsLab.slnx` in Visual Studio, select the launch profile **http** and press F5.
+   The API listens on port 5113. Without Visual Studio the same is `dotnet run --project Payments.Api` from `src/`.
+3. In `payments.http` change the first line to `@baseUrl = http://localhost:5113`.
+
+Both ways use the same database `payments`. The container gets code changes only after
+`docker compose up -d --build`; Visual Studio always runs the current code.
+
+### How to send the requests
+
+1. VS Code: install the REST Client extension once, then open `src/Payments.Api/payments.http` and click
+   **Send Request** above each request:
+
+   ```powershell
+   code --install-extension humao.rest-client
+   ```
+
+   Visual Studio opens `.http` files itself (the **Send request** link above each request); no extension needed.
+2. Send the requests from top to bottom. Request 1 creates a payment; requests 5-9 use its id automatically.
+   Compare each response with the comment above the request: status code, `ETag` header, body.
+3. In Compass, open the database `payments` (not `lab`), collection `payments`: check the stored document and the
+   **Indexes** tab (`ux_idempotencyKey`, `ix_merchantId_createdAt`).
+4. To run the requests again, change the `Idempotency-Key` in request 1 (for example `order-1002`), otherwise
+   request 1 returns 200 with the old, already captured payment.

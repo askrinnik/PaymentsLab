@@ -1,0 +1,104 @@
+# Manual requests for Payments.Api. Run them one by one from top to bottom in VS Code (REST Client extension),
+# Visual Studio or Rider.
+# docker compose: http://localhost:8080; dotnet run: http://localhost:5113.
+@baseUrl = http://localhost:8080
+@merchant = shop-1
+
+### Health: the API is up and MongoDB answers ping
+GET {{baseUrl}}/health
+
+### 1. Create a payment -> 201 Created, ETag: "0"
+# Change the key to create another payment.
+# @name create
+POST {{baseUrl}}/payments
+Content-Type: application/json
+Idempotency-Key: order-1001
+
+{
+  "merchantId": "{{merchant}}",
+  "customerId": "c-42",
+  "amount": 25.00,
+  "currency": "EUR"
+}
+
+### 2. The same request again (a client retry) -> 200 OK with the SAME payment, no second document
+POST {{baseUrl}}/payments
+Content-Type: application/json
+Idempotency-Key: order-1001
+
+{
+  "merchantId": "{{merchant}}",
+  "customerId": "c-42",
+  "amount": 25.00,
+  "currency": "EUR"
+}
+
+### 3. The same key with a different amount -> 422 Unprocessable Entity
+POST {{baseUrl}}/payments
+Content-Type: application/json
+Idempotency-Key: order-1001
+
+{
+  "merchantId": "{{merchant}}",
+  "customerId": "c-42",
+  "amount": 99.00,
+  "currency": "EUR"
+}
+
+### 4. No Idempotency-Key -> 400 Bad Request
+POST {{baseUrl}}/payments
+Content-Type: application/json
+
+{
+  "merchantId": "{{merchant}}",
+  "customerId": "c-42",
+  "amount": 25.00,
+  "currency": "EUR"
+}
+
+### 5. Read the payment -> 200 OK, ETag: "0"
+GET {{baseUrl}}/payments/{{create.response.body.$.id}}
+
+### 6. Capture with the version we read -> 200 OK, status Captured, ETag: "1"
+POST {{baseUrl}}/payments/{{create.response.body.$.id}}/capture
+Content-Type: application/json
+If-Match: "0"
+
+{
+  "provider": "Adyen"
+}
+
+### 7. Capture again with the old version -> 412 Precondition Failed (someone changed the payment)
+POST {{baseUrl}}/payments/{{create.response.body.$.id}}/capture
+Content-Type: application/json
+If-Match: "0"
+
+{
+  "provider": "Adyen"
+}
+
+### 8. Capture with the current version -> 409 Conflict (already Captured)
+POST {{baseUrl}}/payments/{{create.response.body.$.id}}/capture
+Content-Type: application/json
+If-Match: "1"
+
+{
+  "provider": "Adyen"
+}
+
+### 9. Capture without If-Match -> 428 Precondition Required
+POST {{baseUrl}}/payments/{{create.response.body.$.id}}/capture
+Content-Type: application/json
+
+{
+  "provider": "Adyen"
+}
+
+### 10. Merchant history, newest first (LINQ, index merchantId + createdAt)
+GET {{baseUrl}}/merchants/{{merchant}}/payments?limit=10
+
+### 11. Merchant history in a date range (dates without an offset are UTC)
+GET {{baseUrl}}/merchants/{{merchant}}/payments?from=2026-01-01&to=2027-01-01&limit=10
+
+### 12. Captured totals per currency (aggregation pipeline)
+GET {{baseUrl}}/merchants/{{merchant}}/totals

@@ -20,3 +20,15 @@ curl http://localhost:8080/health
 | RabbitMQ | `amqp://localhost:5672`, UI http://localhost:15672 (guest/guest) |
 
 MongoDB runs as a single-node replica set, because transactions and change streams need one.
+
+## API
+
+| Endpoint | Description |
+|---|---|
+| `POST /payments` | Creates a payment. Requires `Idempotency-Key`: 201 created, 200 retry, 422 key reused with another body |
+| `GET /payments/{id}` | Returns a payment and its version in `ETag` |
+| `POST /payments/{id}/capture` | Captures a payment. Requires `If-Match` with the ETag: 412 version changed, 409 wrong status |
+| `GET /merchants/{merchantId}/payments?from=&to=&limit=` | Newest payments of a merchant |
+| `GET /merchants/{merchantId}/totals` | Captured amount per currency |
+
+Ready-made requests: `src/Payments.Api/payments.http`.

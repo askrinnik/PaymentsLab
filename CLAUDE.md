@@ -8,8 +8,8 @@ MongoDB C# driver. Not intended for production.
 0. Repository skeleton, Dockerfile, docker-compose (done).
 1. MongoDB basics in mongosh: CRUD, indexes, `explain()`, aggregation (done).
 2. Web API on the driver: idempotent `POST /payments`, `capture` with optimistic concurrency, merchant history
-   (LINQ), merchant totals (aggregation pipeline), indexes created at startup.
-3. Tests on Testcontainers: idempotent retry, concurrent capture (200 + 409), transaction rollback.
+   (LINQ), merchant totals (aggregation pipeline), indexes created at startup. Manual requests: `payments.http` (done).
+3. Tests on Testcontainers: idempotent retry, concurrent capture (200 + 412), transaction rollback.
 4. Transaction and outbox: `WithTransactionAsync`, then MassTransit MongoDB outbox with a `PaymentCaptured` event.
 5. Optional: second repository on the EF Core provider, compare with the driver.
 6. Optional: change stream `BackgroundService` with a stored resume token.
@@ -55,16 +55,19 @@ compose the host is `mongo`. `directConnection=true` is required because the rep
 
 ## MongoDB conventions (mandatory)
 
-- Money: `decimal` with `[BsonRepresentation(BsonType.Decimal128)]`, currency stored next to the amount. Never `double`.
-- `Guid`: register `GuidSerializer(GuidRepresentation.Standard)` once at startup.
-- Conventions: `CamelCaseElementNameConvention` and `IgnoreExtraElementsConvention(true)`.
-- Enums stored as strings (`[BsonRepresentation(BsonType.String)]`).
-- `DateTime` always UTC.
+- BSON mapping is global and lives in `Mongo/MongoSetup.cs`; domain classes have no MongoDB attributes:
+  - money: `decimal` stored as `Decimal128` (`DecimalSerializer(BsonType.Decimal128)`), currency next to the amount.
+    Never `double`;
+  - `Guid`: `GuidSerializer(GuidRepresentation.Standard)`;
+  - conventions: camelCase element names, `IgnoreExtraElements`, enums as strings.
+- `DateTime` always UTC, truncated to milliseconds (MongoDB precision) before it is stored.
 - `MongoClient` is a DI singleton; collections are resolved from it.
 - Model aggregates for single-document atomicity first (payment attempts embedded, bounded); use multi-document
-  transactions only where the guide asks for them (capture + outbox).
-- Idempotency: unique index on `idempotencyKey`; duplicate key (11000) means "return the stored result".
-- Optimistic concurrency: `Version` field in the update filter plus `$inc`; `ModifiedCount == 0` means 409.
+  transactions only where the plan asks for them (capture + outbox).
+- Idempotency: unique index on `idempotencyKey`; duplicate key (11000) means "return the stored result" if the
+  request is the same (200), otherwise 422.
+- Optimistic concurrency: the client sends the `ETag` it read in `If-Match`; the update filter contains that
+  `version`, the update does `$inc`. Version mismatch -> 412, missing `If-Match` -> 428, wrong status -> 409.
 - Indexes are created in code at startup (`Indexes.CreateManyAsync`); compound indexes follow the ESR rule.
 - Write concern stays `majority` (the default); do not lower it.
 
