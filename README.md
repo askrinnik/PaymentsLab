@@ -42,3 +42,13 @@ dotnet test
 
 The tests start their own MongoDB replica set in Docker (Testcontainers) and run the API in memory, so only Docker
 must be running. They do not touch the database of docker-compose.
+
+## Messaging
+
+A capture updates the payment and publishes `PaymentCaptured` in one MongoDB transaction (transactional outbox,
+MassTransit 8.5 MongoDB bus outbox). A background service delivers committed messages to RabbitMQ, and
+`PaymentCapturedConsumer` logs them:
+
+```bash
+docker compose logs api | grep "PaymentCaptured received"
+```

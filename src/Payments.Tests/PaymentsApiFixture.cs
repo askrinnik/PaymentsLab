@@ -1,11 +1,15 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using MassTransit;
+using MassTransit.Testing;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 using Payments.Api.Domain;
+using Payments.Api.Messaging;
 using Payments.Api.Payments;
 using Testcontainers.MongoDb;
 
@@ -29,6 +33,12 @@ public sealed class PaymentsApiFixture : IAsyncLifetime
 
     public HttpClient Client { get; private set; } = null!;
 
+    /// <summary>Records published and consumed messages; waits for them with a timeout.</summary>
+    public ITestHarness Harness => _factory!.Services.GetTestHarness();
+
+    /// <summary>A DI scope, like one HTTP request: for scoped services such as the MassTransit MongoDbContext.</summary>
+    public IServiceScope CreateScope() => _factory!.Services.CreateScope();
+
     /// <summary>Direct access to the collection: to arrange data and to check what is really stored.</summary>
     public IMongoCollection<Payment> Payments { get; private set; } = null!;
 
@@ -37,7 +47,13 @@ public sealed class PaymentsApiFixture : IAsyncLifetime
         await _mongo.StartAsync();
 
         _factory = new WebApplicationFactory<Program>().WithWebHostBuilder(builder =>
-            builder.UseSetting("ConnectionStrings:Mongo", _mongo.GetConnectionString()));
+        {
+            builder.UseSetting("ConnectionStrings:Mongo", _mongo.GetConnectionString());
+            // The MassTransit test harness replaces RabbitMQ with an in-memory transport and records every message.
+            // AddMassTransitTestHarness replaces the whole MassTransit setup, so the outbox is configured again with
+            // the same code as in the API: messages still go through the outbox collection in the container.
+            builder.ConfigureTestServices(services => services.AddMassTransitTestHarness(MessagingSetup.AddConsumersAndOutbox));
+        });
 
         // Creating the client starts the API; its hosted service creates the indexes.
         Client = _factory.CreateClient();
@@ -49,6 +65,25 @@ public sealed class PaymentsApiFixture : IAsyncLifetime
         if (_factory is not null) await _factory.DisposeAsync();
         await _mongo.DisposeAsync();
     }
+
+    /// <summary>
+    /// Waits until the condition is true, up to 10 seconds. The outbox delivers messages in the background, up to
+    /// one QueryDelay after the commit, so a test must wait for them. Harness.Any is not enough here: it stops
+    /// waiting as soon as the bus looks idle, which happens before the delivery service polls the outbox.
+    /// </summary>
+    public static async Task<bool> EventuallyAsync(Func<bool> condition)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (condition()) return true;
+            await Task.Delay(100);
+        }
+        return condition();
+    }
+
+    /// <summary>Longer than the outbox QueryDelay: a message that was going to be delivered has arrived by now.</summary>
+    public static Task WaitLongerThanOutboxDelayAsync() => Task.Delay(TimeSpan.FromSeconds(3));
 
     public static string NewId(string prefix) => $"{prefix}-{Guid.NewGuid():N}";
 

@@ -35,7 +35,9 @@ public static class MongoSetup
                 new IgnoreExtraElementsConvention(true), // old or unknown fields do not break reads
                 new EnumRepresentationConvention(BsonType.String), // "Captured" instead of 2
             };
-            ConventionRegistry.Register("payments", conventions, _ => true);
+            // Only for our own types: library types (the MassTransit outbox documents) keep their own mapping.
+            ConventionRegistry.Register(
+                "payments", conventions, type => type.Namespace?.StartsWith("Payments.Api", StringComparison.Ordinal) == true);
 
             _registered = true;
         }

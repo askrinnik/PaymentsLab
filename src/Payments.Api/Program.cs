@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using Payments.Api.Messaging;
 using Payments.Api.Mongo;
 using Payments.Api.Payments;
 
@@ -8,7 +9,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddMongo();
 builder.Services.AddSingleton(TimeProvider.System);
-builder.Services.AddSingleton<PaymentService>();
+builder.Services.AddMessaging();
+builder.Services.AddScoped<PaymentService>();
 builder.Services.AddProblemDetails();
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter())); // "Captured" instead of 2 in JSON

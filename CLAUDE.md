@@ -9,9 +9,10 @@ MongoDB C# driver. Not intended for production.
 1. MongoDB basics in mongosh: CRUD, indexes, `explain()`, aggregation (done).
 2. Web API on the driver: idempotent `POST /payments`, `capture` with optimistic concurrency, merchant history
    (LINQ), merchant totals (aggregation pipeline), indexes created at startup. Manual requests: `payments.http` (done).
-3. Tests on Testcontainers (`src/Payments.Tests`): idempotent retry, concurrent create and capture, merchant queries.
-4. Transaction and outbox: `WithTransactionAsync`, then MassTransit MongoDB outbox with a `PaymentCaptured` event.
-   Test: a rolled-back transaction leaves no event in the outbox.
+3. Tests on Testcontainers (`src/Payments.Tests`): idempotent retry, concurrent create and capture, merchant queries (done).
+4. Transaction and outbox: capture updates the payment and publishes `PaymentCaptured` through the MassTransit
+   MongoDB bus outbox in one transaction; the event reaches RabbitMQ and `PaymentCapturedConsumer`.
+   Tests: one event per capture, one event for 10 concurrent captures, an aborted transaction leaves nothing.
 5. Optional: second repository on the EF Core provider, compare with the driver.
 6. Optional: change stream `BackgroundService` with a stored resume token.
 
@@ -25,7 +26,8 @@ Explain MongoDB-specific choices by comparing them with SQL Server / EF Core whe
 - MongoDB 8.0 in Docker, always as a single-node replica set (`rs0`) so transactions and change streams work.
 - Official driver `MongoDB.Driver`; `MongoDB.EntityFrameworkCore` only for the optional comparison step.
 - Tests: xUnit + `Testcontainers.MongoDb` with `.WithReplicaSet()`. No mocks for MongoDB.
-- Messaging (step 4): MassTransit on RabbitMQ with the MongoDB outbox.
+- Messaging: MassTransit 8.5 on RabbitMQ with the MongoDB bus outbox. Stay on 8.x: MassTransit 9 needs a commercial
+  license (8.x is Apache-2.0). Tests replace RabbitMQ with the MassTransit test harness but keep the same outbox.
 
 ## Layout and commands
 
@@ -66,6 +68,9 @@ compose the host is `mongo`. `directConnection=true` is required because the rep
 - `MongoClient` is a DI singleton; collections are resolved from it.
 - Model aggregates for single-document atomicity first (payment attempts embedded, bounded); use multi-document
   transactions only where the plan asks for them (capture + outbox).
+- Transactions with the MassTransit outbox: start them with MassTransit's `MongoDbContext.BeginTransaction` (the outbox
+  needs its `TransactionId`), not with `session.WithTransactionAsync`; retry on the `TransientTransactionError`
+  label (see `PaymentService.InTransactionAsync`).
 - Idempotency: unique index on `idempotencyKey`; duplicate key (11000) means "return the stored result" if the
   request is the same (200), otherwise 422.
 - Optimistic concurrency: the client sends the `ETag` it read in `If-Match`; the update filter contains that

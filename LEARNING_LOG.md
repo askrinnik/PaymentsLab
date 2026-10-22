@@ -199,7 +199,7 @@ Both ways use the same database `payments`. The container gets code changes only
 
 ## 2026-10-22. Step 3: automated tests on a real MongoDB
 
-Status: to do.
+Status: done.
 
 What was built (`src/Payments.Tests`, xUnit):
 
@@ -230,3 +230,55 @@ dotnet test ─► Testcontainers starts MongoDB 8.0 (single-node replica set) i
 5. Read the comments above the tests. Note `Capture_with_a_stale_etag_is_rejected_even_if_the_status_allows_it`:
    the parallel-capture test alone would pass even without the version check, because the status filter also stops
    a second capture. Only this test fails when the version is removed from the update filter (checked by hand).
+
+## 2026-10-22. Step 4: transaction and transactional outbox
+
+Status: to do.
+
+What was built:
+
+```text
+POST /payments/{id}/capture
+  └─ one MongoDB transaction ─┬─ payments: status Captured, attempt, version + 1
+                              └─ outbox.messages: PaymentCaptured (MassTransit bus outbox)
+     commit
+  └─ outbox delivery service (every second) ─► RabbitMQ ─► PaymentCapturedConsumer (log line)
+```
+
+| File | What it shows |
+|---|---|
+| `Messaging/MessagingSetup.cs` | MassTransit on RabbitMQ, MongoDB outbox with `UseBusOutbox()` |
+| `Messaging/PaymentCaptured.cs`, `PaymentCapturedConsumer.cs` | The event and a consumer that logs it |
+| `Payments/PaymentService.cs` | `CaptureAsync` in a transaction; `InTransactionAsync`: begin, commit, retry on `TransientTransactionError` |
+| `Payments.Tests/OutboxTests.cs` | one event per capture; one event for 10 concurrent captures; an aborted transaction leaves nothing |
+
+Notes:
+
+- MassTransit is pinned to 8.5.12 (Apache-2.0). MassTransit 9 needs a commercial license.
+- The plan said `session.WithTransactionAsync`. The MassTransit outbox cannot use it: the transaction must be started
+  by MassTransit's `MongoDbContext.BeginTransaction`, which sets the `TransactionId` the outbox needs (without it:
+  `ArgumentNullException: TransactionId`). `InTransactionAsync` does what `WithTransactionAsync` does: on a
+  `TransientTransactionError` (a write conflict with a concurrent capture) it aborts and retries.
+
+1. From `src/`, rebuild and start the stack:
+
+   ```powershell
+   docker compose up -d --build --wait
+   ```
+
+2. In `payments.http`, send request 1 (change the `Idempotency-Key` to a new value) and request 6 (capture).
+3. Check that the event went through RabbitMQ to the consumer:
+
+   ```powershell
+   docker compose logs api | Select-String "PaymentCaptured received"
+   ```
+
+4. RabbitMQ UI: http://localhost:15672 (guest/guest), tab **Queues**: the queue `PaymentCaptured` and its message
+   rates.
+5. Compass, database `payments`: the collections `outbox.messages` (empty: delivered messages are removed),
+   `outbox.states` and `inbox.states` were created by MassTransit.
+6. From `src/`, run the tests (19 tests, about 15 seconds):
+
+   ```powershell
+   dotnet test
+   ```

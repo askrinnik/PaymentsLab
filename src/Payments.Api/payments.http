@@ -60,6 +60,7 @@ Content-Type: application/json
 GET {{baseUrl}}/payments/{{create.response.body.$.id}}
 
 ### 6. Capture with the version we read -> 200 OK, status Captured, ETag: "1"
+# Also publishes PaymentCaptured through the outbox: docker compose logs api shows "PaymentCaptured received".
 POST {{baseUrl}}/payments/{{create.response.body.$.id}}/capture
 Content-Type: application/json
 If-Match: "0"

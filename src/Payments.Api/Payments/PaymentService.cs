@@ -1,6 +1,9 @@
+using MassTransit;
+using MassTransit.MongoDbIntegration;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 using Payments.Api.Domain;
+using Payments.Api.Messaging;
 
 namespace Payments.Api.Payments;
 
@@ -23,8 +26,12 @@ public enum CaptureOutcome
 
 public sealed record CaptureResult(CaptureOutcome Outcome, Payment? Payment);
 
-/// <summary>All MongoDB access for payments. Endpoints translate the results into HTTP responses.</summary>
-public sealed class PaymentService(IMongoCollection<Payment> payments, TimeProvider clock)
+/// <summary>
+/// All MongoDB access for payments. Endpoints translate the results into HTTP responses.
+/// Scoped: MongoDbContext and IPublishEndpoint (the outbox) are scoped to one HTTP request.
+/// </summary>
+public sealed class PaymentService(
+    IMongoCollection<Payment> payments, MongoDbContext mongoContext, IPublishEndpoint publishEndpoint, TimeProvider clock)
 {
     private static readonly PaymentStatus[] CapturableStatuses = [PaymentStatus.Pending, PaymentStatus.Authorized];
 
@@ -64,24 +71,42 @@ public sealed class PaymentService(IMongoCollection<Payment> payments, TimeProvi
         await payments.Find(p => p.Id == id).FirstOrDefaultAsync(ct);
 
     /// <summary>
-    /// One atomic update: status, new attempt and version. The filter contains the version the client read
-    /// (optimistic concurrency) and the statuses that allow a capture.
+    /// Captures the payment and publishes <see cref="PaymentCaptured"/> in ONE MongoDB transaction:
+    ///   1. FindOneAndUpdate: status, new attempt and version. The filter contains the version the client read
+    ///      (optimistic concurrency) and the statuses that allow a capture.
+    ///   2. Publish: with the bus outbox this is an insert into the outbox collection, with the same session.
+    /// Either both writes are committed or none. Without the transaction a crash between them would lose the event
+    /// (or, in the other order, publish an event for a capture that never happened).
     /// </summary>
     public async Task<CaptureResult> CaptureAsync(Guid id, int expectedVersion, string provider, CancellationToken ct)
     {
         var filter = Builders<Payment>.Filter;
         var update = Builders<Payment>.Update;
+        var capturedAt = UtcNow();
 
-        var captured = await payments.FindOneAndUpdateAsync(
-            filter.Eq(p => p.Id, id)
-                & filter.Eq(p => p.Version, expectedVersion)
-                & filter.In(p => p.Status, CapturableStatuses),
-            update
-                .Set(p => p.Status, PaymentStatus.Captured)
-                .Push(p => p.Attempts, new Attempt(UtcNow(), provider, AttemptResult.Ok))
-                .Inc(p => p.Version, 1),
-            new FindOneAndUpdateOptions<Payment> { ReturnDocument = ReturnDocument.After },
-            ct);
+        var captured = await InTransactionAsync(async session =>
+        {
+            var payment = await payments.FindOneAndUpdateAsync(
+                session,
+                filter.Eq(p => p.Id, id)
+                    & filter.Eq(p => p.Version, expectedVersion)
+                    & filter.In(p => p.Status, CapturableStatuses),
+                update
+                    .Set(p => p.Status, PaymentStatus.Captured)
+                    .Push(p => p.Attempts, new Attempt(capturedAt, provider, AttemptResult.Ok))
+                    .Inc(p => p.Version, 1),
+                new FindOneAndUpdateOptions<Payment> { ReturnDocument = ReturnDocument.After },
+                ct);
+
+            if (payment is not null)
+            {
+                // Not sent to RabbitMQ here: the bus outbox inserts it into the outbox collection with this session.
+                await publishEndpoint.Publish(
+                    new PaymentCaptured(payment.Id, payment.MerchantId, payment.Amount, payment.Currency, capturedAt), ct);
+            }
+
+            return payment;
+        }, ct);
 
         if (captured is not null) return new CaptureResult(CaptureOutcome.Captured, captured);
 
@@ -110,6 +135,42 @@ public sealed class PaymentService(IMongoCollection<Payment> payments, TimeProvi
             .Group(p => p.Currency, g => new CurrencyTotal(g.Key, g.Sum(p => p.Amount), g.Count()))
             .SortByDescending(t => t.Total)
             .ToListAsync(ct);
+
+    private const int MaxTransactionAttempts = 10;
+
+    /// <summary>
+    /// Runs <paramref name="work"/> in a MongoDB transaction and commits it. SQL Server: BEGIN TRAN ... COMMIT with a
+    /// retry loop for deadlocks.
+    ///
+    /// The driver has session.WithTransactionAsync for this, but the MassTransit outbox cannot use it: the outbox needs
+    /// the transaction to be started by MassTransit's MongoDbContext.BeginTransaction, which also sets the
+    /// TransactionId the outbox stores with each message. So this method does what WithTransactionAsync does:
+    /// on an error labelled TransientTransactionError (for example a write conflict with a concurrent capture of the
+    /// same payment) it aborts and runs the whole transaction again, after a short random delay.
+    /// </summary>
+    private async Task<T> InTransactionAsync<T>(Func<IClientSessionHandle, Task<T>> work, CancellationToken ct)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            await mongoContext.BeginTransaction(ct);
+            try
+            {
+                var result = await work(mongoContext.Session ?? throw new InvalidOperationException("No MongoDB session."));
+                await mongoContext.CommitTransaction(ct);
+                return result;
+            }
+            catch (MongoException e) when (e.HasErrorLabel("TransientTransactionError") && attempt < MaxTransactionAttempts)
+            {
+                await mongoContext.AbortTransaction(ct);
+                await Task.Delay(Random.Shared.Next(5, 20 * attempt), ct); // let the other transaction finish
+            }
+            catch
+            {
+                await mongoContext.AbortTransaction(ct);
+                throw;
+            }
+        }
+    }
 
     private static bool IsSameRequest(Payment stored, CreatePaymentRequest request) =>
         stored.MerchantId == request.MerchantId
