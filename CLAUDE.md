@@ -29,6 +29,8 @@ Explain MongoDB-specific choices by comparing them with SQL Server / EF Core whe
 ## Layout and commands
 
 - The repository root holds only general files: `README.md`, `CLAUDE.md`, git and editor settings.
+- `mongosh/` holds the mongosh lessons (step 1). They use the database `lab`, not `payments`. The folder is
+  mounted into the `mongo` container as `/mongosh`. Lessons must stay re-runnable.
 - Everything related to the .NET build and Docker lives in `src/`: `PaymentsLab.slnx`, `global.json`,
   `Directory.Build.props`, `Dockerfile`, `.dockerignore`, `docker-compose.yml` and the projects.
 - Test projects live in `src/` next to the projects they test (for example `src/Payments.Tests`); there is no

@@ -9,6 +9,7 @@ services:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
+      - ../mongosh:/mongosh:ro # lesson scripts, run with: mongosh /mongosh/<file>.js
     healthcheck:
       # Initiates the replica set on first start, then reports healthy once this node is primary.
       # The member host is localhost, so clients must use directConnection=true.
